@@ -95,6 +95,29 @@ async function tryLogin(userId, password, proxy) {
       }
     } catch {}
 
+    // Dismiss Usercentrics cookie banner if present
+    try {
+      const ucBtn = page.locator('button:has-text("Accept All")');
+      if (await ucBtn.isVisible({ timeout: 3000 })) {
+        await ucBtn.click();
+        await page.waitForTimeout(1000);
+        log('INFO', `[${userId}] Usercentrics banner dismissed`);
+      }
+    } catch {}
+    try {
+      const ucSave = page.locator('button:has-text("Save Settings")');
+      if (await ucSave.isVisible({ timeout: 2000 })) {
+        await ucSave.click();
+        await page.waitForTimeout(1000);
+      }
+    } catch {}
+
+    // Wait for any loading overlay to disappear
+    try {
+      await page.locator('.loading-overlay').waitFor({ state: 'hidden', timeout: 10000 });
+      log('INFO', `[${userId}] Loading overlay gone`);
+    } catch {}
+
     const currentUrl = page.url();
     log('INFO', `[${userId}] Page loaded: ${currentUrl}`);
 
@@ -119,7 +142,14 @@ async function tryLogin(userId, password, proxy) {
     log('INFO', `[${userId}] Filling credentials...`);
     await userField.fill(userId);
     await page.locator('input[type="password"]').first().fill(password);
-    await page.locator('#login_button').click();
+
+    // Click login - try normal click first, then force click
+    try {
+      await page.locator('#login_button').click({ timeout: 10000 });
+    } catch {
+      log('INFO', `[${userId}] Normal click failed, trying force click...`);
+      await page.locator('#login_button').click({ force: true, timeout: 5000 });
+    }
     log('INFO', `[${userId}] Submitted, waiting...`);
     await page.waitForTimeout(6000);
 

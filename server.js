@@ -19,13 +19,12 @@ async function testProxy(proxy) {
   try {
     const browser = await chromium.launch({
       headless: true,
-      args: [
-        '--no-sandbox', '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage', '--disable-gpu',
-        `--proxy-server=${host}:${port}`
-      ]
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
     });
-    const page = await browser.newPage();
+    const context = await browser.newContext({
+      proxy: { server: `http://${host}:${port}` }
+    });
+    const page = await context.newPage();
     await page.goto('https://httpbin.org/ip', { timeout: 15000, waitUntil: 'domcontentloaded' });
     const body = await page.textContent('body');
     await browser.close();
@@ -48,28 +47,43 @@ async function tryLogin(userId, password, proxy) {
         '--disable-blink-features=AutomationControlled'
       ]
     };
-    if (proxy) {
-      const [host, port] = proxy.split(':');
-      launchOpts.args.push(`--proxy-server=${host}:${port}`);
-    }
 
     browser = await chromium.launch(launchOpts);
-    const context = await browser.newContext({
+    const contextOpts = {
       userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
       ignoreHTTPSErrors: true,
       viewport: { width: 1366, height: 768 },
       locale: 'en-GB'
-    });
+    };
+    if (proxy) {
+      const [host, port] = proxy.split(':');
+      contextOpts.proxy = { server: `http://${host}:${port}` };
+    }
+    const context = await browser.newContext(contextOpts);
     await context.addInitScript(() => {
       Object.defineProperty(navigator, 'webdriver', { get: () => false });
     });
     const page = await context.newPage();
 
     log('INFO', `[${userId}] Navigating to FedEx login...`);
-    await page.goto('https://www.fedex.com/secure-login/en-gb/#/credentials', {
-      waitUntil: 'domcontentloaded',
-      timeout: 30000
-    });
+    try {
+      await page.goto('https://www.fedex.com/secure-login/en-gb/#/credentials', {
+        waitUntil: 'commit',
+        timeout: 45000
+      });
+    } catch (e) {
+      log('ERR', `[${userId}] First attempt failed: ${e.message}, retrying with load...`);
+      try {
+        await page.goto('https://www.fedex.com/secure-login/en-gb/#/credentials', {
+          waitUntil: 'load',
+          timeout: 45000
+        });
+      } catch (e2) {
+        log('ERR', `[${userId}] Second attempt also failed: ${e2.message}`);
+        await browser.close();
+        return { success: false, error: 'Page timeout (proxy may not support HTTPS)', proxy: proxy || 'direct', time: Date.now() - startTime };
+      }
+    }
     await page.waitForTimeout(5000);
 
     try {

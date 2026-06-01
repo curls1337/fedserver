@@ -71,10 +71,10 @@ async function tryLogin(userId, password, proxy) {
 
     log('INFO', `[${userId}] Navigating to FedEx login...`);
     await page.goto('https://www.fedex.com/secure-login/en-gb/#/credentials', {
-      waitUntil: 'networkidle',
-      timeout: 60000
+      waitUntil: 'domcontentloaded',
+      timeout: 45000
     });
-    await page.waitForTimeout(3000);
+    await page.waitForTimeout(5000);
 
     try {
       const cookieBtn = page.locator('button:has-text("ACCEPT ALL COOKIES")');
@@ -137,7 +137,10 @@ async function tryLogin(userId, password, proxy) {
 
     // Click login - try normal click, force click, then Enter key
     try {
-      await page.locator('#login_button').click({ timeout: 10000 });
+      await Promise.race([
+        page.locator('#login_button').click({ timeout: 10000 }),
+        page.waitForNavigation({ timeout: 15000 })
+      ]);
     } catch {
       try {
         log('INFO', `[${userId}] Normal click failed, trying force click...`);

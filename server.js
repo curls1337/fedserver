@@ -1,6 +1,6 @@
 require('dotenv').config();
 const express = require('express');
-const { chromium, firefox } = require('playwright');
+const { chromium } = require('playwright');
 const path = require('path');
 
 const app = express();
@@ -41,12 +41,16 @@ async function tryLogin(userId, password, proxy) {
   try {
     const launchOpts = {
       headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox']
+      args: [
+        '--no-sandbox', '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage', '--disable-gpu',
+        '--disable-blink-features=AutomationControlled'
+      ]
     };
 
-    browser = await firefox.launch(launchOpts);
+    browser = await chromium.launch(launchOpts);
     const contextOpts = {
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:132.0) Gecko/20100101 Firefox/132.0',
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
       ignoreHTTPSErrors: true,
       viewport: { width: 1920, height: 1080 },
       locale: 'en-GB',
@@ -59,28 +63,18 @@ async function tryLogin(userId, password, proxy) {
       contextOpts.proxy = { server: `http://${host}:${port}` };
     }
     const context = await browser.newContext(contextOpts);
+    await context.addInitScript(() => {
+      Object.defineProperty(navigator, 'webdriver', { get: () => false });
+      window.chrome = { runtime: {} };
+    });
     const page = await context.newPage();
 
     log('INFO', `[${userId}] Navigating to FedEx login...`);
-    try {
-      await page.goto('https://www.fedex.com/secure-login/en-gb/#/credentials', {
-        waitUntil: 'commit',
-        timeout: 45000
-      });
-    } catch (e) {
-      log('ERR', `[${userId}] First attempt failed: ${e.message}, retrying with load...`);
-      try {
-        await page.goto('https://www.fedex.com/secure-login/en-gb/#/credentials', {
-          waitUntil: 'load',
-          timeout: 45000
-        });
-      } catch (e2) {
-        log('ERR', `[${userId}] Second attempt also failed: ${e2.message}`);
-        await browser.close();
-        return { success: false, error: 'Page timeout (proxy may not support HTTPS)', proxy: proxy || 'direct', time: Date.now() - startTime };
-      }
-    }
-    await page.waitForTimeout(5000);
+    await page.goto('https://www.fedex.com/secure-login/en-gb/#/credentials', {
+      waitUntil: 'networkidle',
+      timeout: 60000
+    });
+    await page.waitForTimeout(3000);
 
     try {
       const cookieBtn = page.locator('button:has-text("ACCEPT ALL COOKIES")');

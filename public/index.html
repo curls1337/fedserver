@@ -3,207 +3,213 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>FedEx Auto Login</title>
+  <title>FedEx Checker</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: linear-gradient(135deg, #4b0082 0%, #1a0033 100%);
+      background: #0d1117;
+      color: #c9d1d9;
       min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
       padding: 20px;
     }
-    .container {
-      background: #fff;
-      border-radius: 16px;
-      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-      width: 100%;
-      max-width: 440px;
-      overflow: hidden;
-    }
-    .header {
-      background: linear-gradient(135deg, #4b0082, #ff6600);
-      padding: 28px 32px;
-      text-align: center;
-    }
-    .header h1 {
-      color: #fff;
-      font-size: 24px;
-      font-weight: 700;
-      letter-spacing: -0.5px;
-    }
-    .header p {
-      color: rgba(255,255,255,0.85);
-      font-size: 14px;
-      margin-top: 6px;
-    }
-    .form-section {
-      padding: 32px;
-    }
-    .field {
-      margin-bottom: 20px;
-    }
+    .container { max-width: 900px; margin: 0 auto; }
+    h1 { font-size: 22px; font-weight: 700; color: #f78166; margin-bottom: 4px; }
+    .sub { font-size: 13px; color: #8b949e; margin-bottom: 20px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
     .field label {
-      display: block;
-      font-size: 13px;
-      font-weight: 600;
-      color: #333;
-      margin-bottom: 6px;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
+      display: block; font-size: 12px; font-weight: 600; color: #8b949e;
+      margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px;
     }
-    .field input {
-      width: 100%;
-      padding: 12px 16px;
-      border: 2px solid #e0e0e0;
-      border-radius: 10px;
-      font-size: 15px;
-      transition: border-color 0.2s;
-      outline: none;
+    .field textarea {
+      width: 100%; height: 180px; padding: 12px; background: #161b22;
+      border: 1px solid #30363d; border-radius: 8px; color: #c9d1d9;
+      font-size: 13px; font-family: 'SF Mono', 'Consolas', monospace;
+      resize: vertical; outline: none; transition: border-color 0.2s;
     }
-    .field input:focus {
-      border-color: #4b0082;
-    }
+    .field textarea:focus { border-color: #f78166; }
+    .controls { display: flex; gap: 10px; align-items: center; margin-bottom: 20px; }
     button {
-      width: 100%;
-      padding: 14px;
-      background: linear-gradient(135deg, #ff6600, #e55d00);
-      color: #fff;
-      border: none;
-      border-radius: 10px;
-      font-size: 16px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: transform 0.1s, box-shadow 0.2s;
-      letter-spacing: 0.5px;
+      padding: 10px 24px; background: #f78166; color: #0d1117;
+      border: none; border-radius: 8px; font-size: 14px; font-weight: 600;
+      cursor: pointer; transition: opacity 0.2s;
     }
-    button:hover {
-      transform: translateY(-1px);
-      box-shadow: 0 6px 20px rgba(255,102,0,0.4);
+    button:hover { opacity: 0.9; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    button.stop { background: #da3633; color: #fff; }
+    .stats { display: flex; gap: 16px; font-size: 13px; }
+    .stat { padding: 6px 14px; border-radius: 6px; font-weight: 600; }
+    .stat.success { background: #1a3a2a; color: #3fb950; }
+    .stat.dead { background: #3a1a1a; color: #f85149; }
+    .stat.progress { background: #1a2a3a; color: #58a6ff; }
+    .results { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .panel { background: #161b22; border: 1px solid #30363d; border-radius: 8px; overflow: hidden; }
+    .panel-header {
+      padding: 10px 14px; font-size: 13px; font-weight: 600;
+      border-bottom: 1px solid #30363d; display: flex; justify-content: space-between;
     }
-    button:disabled {
-      opacity: 0.6;
-      cursor: not-allowed;
-      transform: none;
-      box-shadow: none;
+    .panel-header.live { color: #3fb950; }
+    .panel-header.dead { color: #f85149; }
+    .panel-body { max-height: 400px; overflow-y: auto; padding: 8px; }
+    .row {
+      display: flex; align-items: center; padding: 6px 8px;
+      border-radius: 4px; font-size: 12px; font-family: 'SF Mono', 'Consolas', monospace;
+      gap: 8px; margin-bottom: 2px;
     }
-    .result {
-      margin-top: 20px;
-      padding: 16px;
-      border-radius: 10px;
-      font-size: 14px;
-      display: none;
-    }
-    .result.success {
-      display: block;
-      background: #e8f5e9;
-      border: 1px solid #4caf50;
-      color: #2e7d32;
-    }
-    .result.error {
-      display: block;
-      background: #fbe9e7;
-      border: 1px solid #f44336;
-      color: #c62828;
-    }
-    .result img {
-      width: 100%;
-      border-radius: 8px;
-      margin-top: 12px;
-      border: 1px solid #ddd;
-    }
-    .spinner {
-      display: none;
-      width: 20px;
-      height: 20px;
-      border: 3px solid rgba(255,255,255,0.3);
-      border-top-color: #fff;
-      border-radius: 50%;
-      animation: spin 0.8s linear infinite;
-      margin: 0 auto;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
-    button.loading .btn-text { display: none; }
-    button.loading .spinner { display: block; }
+    .row.live { background: #1a3a2a; }
+    .row.dead { background: #3a1a1a; }
+    .row .user { color: #c9d1d9; font-weight: 600; min-width: 100px; }
+    .row .pass { color: #8b949e; }
+    .row .proxy { color: #58a6ff; margin-left: auto; font-size: 11px; }
+    .empty { text-align: center; padding: 30px; color: #484f58; font-size: 13px; }
+    .progress-bar { height: 3px; background: #30363d; border-radius: 2px; margin-bottom: 16px; overflow: hidden; }
+    .progress-fill { height: 100%; background: #f78166; transition: width 0.3s; width: 0%; }
   </style>
 </head>
 <body>
   <div class="container">
-    <div class="header">
-      <h1>FedEx Auto Login</h1>
-      <p>Automated login to FedEx Secure Login</p>
+    <h1>FedEx Account Checker</h1>
+    <p class="sub">Paste user:pass list and proxies, click Start</p>
+
+    <div class="grid">
+      <div class="field">
+        <label>Accounts (user:pass)</label>
+        <textarea id="accounts" placeholder="user1:pass1&#10;user2:pass2&#10;user3:pass3"></textarea>
+      </div>
+      <div class="field">
+        <label>Proxies (IP:port) — optional</label>
+        <textarea id="proxies" placeholder="127.0.0.1:8080&#10;192.168.1.1:3128"></textarea>
+      </div>
     </div>
-    <div class="form-section">
-      <div class="field">
-        <label for="userId">User ID</label>
-        <input type="text" id="userId" placeholder="Enter your FedEx User ID" autocomplete="off">
+
+    <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+
+    <div class="controls">
+      <button id="startBtn" onclick="startCheck()">Start Check</button>
+      <button id="stopBtn" class="stop" onclick="stopCheck()" style="display:none">Stop</button>
+      <div class="stats">
+        <span class="stat progress" id="statProgress" style="display:none">0/0</span>
+        <span class="stat success" id="statSuccess" style="display:none">Live: 0</span>
+        <span class="stat dead" id="statDead" style="display:none">Dead: 0</span>
       </div>
-      <div class="field">
-        <label for="password">Password</label>
-        <input type="password" id="password" placeholder="Enter your password">
+    </div>
+
+    <div class="results">
+      <div class="panel">
+        <div class="panel-header live">LIVE <span id="liveCount">0</span></div>
+        <div class="panel-body" id="liveList"><div class="empty">Waiting...</div></div>
       </div>
-      <button id="loginBtn" onclick="doLogin()">
-        <span class="btn-text">Log in to FedEx</span>
-        <div class="spinner"></div>
-      </button>
-      <div id="result" class="result"></div>
+      <div class="panel">
+        <div class="panel-header dead">DEAD <span id="deadCount">0</span></div>
+        <div class="panel-body" id="deadList"><div class="empty">Waiting...</div></div>
+      </div>
     </div>
   </div>
 
   <script>
-    async function doLogin() {
-      const userId = document.getElementById('userId').value.trim();
-      const password = document.getElementById('password').value;
-      const btn = document.getElementById('loginBtn');
-      const result = document.getElementById('result');
+    var liveCount = 0, deadCount = 0, total = 0, checked = 0;
+    var abortController = null;
 
-      if (!userId || !password) {
-        result.className = 'result error';
-        result.innerHTML = 'Please enter both User ID and Password';
-        return;
-      }
+    function startCheck() {
+      var rawAccounts = document.getElementById('accounts').value.trim();
+      var rawProxies = document.getElementById('proxies').value.trim();
+      if (!rawAccounts) return alert('Please paste accounts (user:pass)');
 
-      btn.classList.add('loading');
-      btn.disabled = true;
-      result.className = 'result';
-      result.style.display = 'none';
+      var accounts = rawAccounts.split('\n').map(function(l) { return l.trim(); }).filter(function(l) { return l && l.indexOf(':') !== -1; });
+      var proxies = rawProxies ? rawProxies.split('\n').map(function(l) { return l.trim(); }).filter(function(l) { return l; }) : [];
+      if (!accounts.length) return alert('No valid accounts found');
 
-      try {
-        const res = await fetch('/api/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId, password })
-        });
+      liveCount = 0; deadCount = 0; total = accounts.length; checked = 0;
+      document.getElementById('liveList').innerHTML = '';
+      document.getElementById('deadList').innerHTML = '';
+      document.getElementById('liveCount').textContent = '0';
+      document.getElementById('deadCount').textContent = '0';
+      document.getElementById('progressFill').style.width = '0%';
+      document.getElementById('startBtn').disabled = true;
+      document.getElementById('stopBtn').style.display = '';
+      document.getElementById('statProgress').style.display = '';
+      document.getElementById('statSuccess').style.display = '';
+      document.getElementById('statDead').style.display = '';
+      updateStats();
 
-        const data = await res.json();
+      abortController = new AbortController();
 
-        if (data.success) {
-          result.className = 'result success';
-          result.innerHTML = `<strong>Login Successful!</strong><br>Redirected to: ${data.redirectedTo}`;
-          if (data.screenshot) {
-            result.innerHTML += `<img src="${data.screenshot}" alt="Screenshot">`;
-          }
-        } else {
-          result.className = 'result error';
-          result.innerHTML = `<strong>Login Failed</strong><br>${data.message}`;
-          if (data.screenshot) {
-            result.innerHTML += `<img src="${data.screenshot}" alt="Screenshot">`;
+      fetch('/api/check', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accounts: accounts, proxies: proxies }),
+        signal: abortController.signal
+      }).then(async function(res) {
+        var reader = res.body.getReader();
+        var decoder = new TextDecoder();
+        var buffer = '';
+
+        while (true) {
+          var chunk = await reader.read();
+          if (chunk.done) break;
+          buffer += decoder.decode(chunk.value, { stream: true });
+          var parts = buffer.split('\n\n');
+          buffer = parts.pop();
+          for (var i = 0; i < parts.length; i++) {
+            var line = parts[i];
+            if (line.indexOf('data: ') === 0) {
+              try {
+                var data = JSON.parse(line.slice(6));
+                if (data.type === 'progress') {
+                  checked = data.index;
+                  if (data.result === 'success') {
+                    liveCount++;
+                    addRow('live', data.entry);
+                  } else {
+                    deadCount++;
+                    addRow('dead', data.entry);
+                  }
+                  updateStats();
+                } else if (data.type === 'done') {
+                  finishCheck();
+                }
+              } catch(e) {}
+            }
           }
         }
-      } catch (err) {
-        result.className = 'result error';
-        result.innerHTML = `Connection error: ${err.message}`;
-      } finally {
-        btn.classList.remove('loading');
-        btn.disabled = false;
-      }
+        finishCheck();
+      }).catch(function() { finishCheck(); });
     }
 
-    document.getElementById('password').addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') doLogin();
-    });
+    function addRow(type, entry) {
+      var list = document.getElementById(type === 'live' ? 'liveList' : 'deadList');
+      var div = document.createElement('div');
+      div.className = 'row ' + type;
+      div.innerHTML = '<span class="user">' + esc(entry.user) + '</span><span class="pass">' + esc(entry.pass) + '</span><span class="proxy">' + esc(entry.proxy) + '</span>';
+      list.appendChild(div);
+      list.scrollTop = list.scrollHeight;
+    }
+
+    function updateStats() {
+      document.getElementById('statProgress').textContent = checked + '/' + total;
+      document.getElementById('statSuccess').textContent = 'Live: ' + liveCount;
+      document.getElementById('statDead').textContent = 'Dead: ' + deadCount;
+      document.getElementById('liveCount').textContent = liveCount;
+      document.getElementById('deadCount').textContent = deadCount;
+      document.getElementById('progressFill').style.width = total ? (checked / total * 100) + '%' : '0%';
+    }
+
+    function finishCheck() {
+      document.getElementById('startBtn').disabled = false;
+      document.getElementById('stopBtn').style.display = 'none';
+      updateStats();
+    }
+
+    function stopCheck() {
+      if (abortController) abortController.abort();
+      document.getElementById('startBtn').disabled = false;
+      document.getElementById('stopBtn').style.display = 'none';
+      updateStats();
+    }
+
+    function esc(s) {
+      return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
   </script>
 </body>
 </html>

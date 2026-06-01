@@ -44,16 +44,20 @@ async function tryLogin(userId, password, proxy) {
       args: [
         '--no-sandbox', '--disable-setuid-sandbox',
         '--disable-dev-shm-usage', '--disable-gpu',
-        '--disable-blink-features=AutomationControlled'
+        '--disable-blink-features=AutomationControlled',
+        '--disable-features=IsolateOrigins,site-per-process'
       ]
     };
 
     browser = await chromium.launch(launchOpts);
     const contextOpts = {
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
       ignoreHTTPSErrors: true,
-      viewport: { width: 1366, height: 768 },
-      locale: 'en-GB'
+      viewport: { width: 1920, height: 1080 },
+      locale: 'en-GB',
+      timezoneId: 'Europe/London',
+      geolocation: { latitude: 51.5074, longitude: -0.1278 },
+      permissions: ['geolocation']
     };
     if (proxy) {
       const [host, port] = proxy.split(':');
@@ -62,6 +66,7 @@ async function tryLogin(userId, password, proxy) {
     const context = await browser.newContext(contextOpts);
     await context.addInitScript(() => {
       Object.defineProperty(navigator, 'webdriver', { get: () => false });
+      window.chrome = { runtime: {} };
     });
     const page = await context.newPage();
 
@@ -141,14 +146,21 @@ async function tryLogin(userId, password, proxy) {
 
     log('INFO', `[${userId}] Filling credentials...`);
     await userField.fill(userId);
+    await page.waitForTimeout(300 + Math.random() * 500);
     await page.locator('input[type="password"]').first().fill(password);
+    await page.waitForTimeout(300 + Math.random() * 500);
 
-    // Click login - try normal click first, then force click
+    // Click login - try normal click, force click, then Enter key
     try {
       await page.locator('#login_button').click({ timeout: 10000 });
     } catch {
-      log('INFO', `[${userId}] Normal click failed, trying force click...`);
-      await page.locator('#login_button').click({ force: true, timeout: 5000 });
+      try {
+        log('INFO', `[${userId}] Normal click failed, trying force click...`);
+        await page.locator('#login_button').click({ force: true, timeout: 5000 });
+      } catch {
+        log('INFO', `[${userId}] Force click failed, pressing Enter...`);
+        await page.locator('#login_button').press('Enter');
+      }
     }
     log('INFO', `[${userId}] Submitted, waiting...`);
     await page.waitForTimeout(6000);

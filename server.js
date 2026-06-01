@@ -40,9 +40,10 @@ async function tryLogin(userId, password, proxy) {
     const page = await context.newPage();
 
     await page.goto('https://www.fedex.com/secure-login/en-gb/#/credentials', {
-      waitUntil: 'networkidle',
+      waitUntil: 'domcontentloaded',
       timeout: 30000
     });
+    await page.waitForTimeout(3000);
 
     try {
       const cookieBtn = page.locator('button:has-text("ACCEPT ALL COOKIES")');
@@ -52,10 +53,24 @@ async function tryLogin(userId, password, proxy) {
       }
     } catch {}
 
-    await page.waitForSelector('#username', { timeout: 10000 });
-    await page.fill('#username', userId);
-    await page.fill('input[type="password"]', password);
-    await page.click('#login_button');
+    // Try multiple selectors for the user ID field
+    let userField;
+    try {
+      userField = page.locator('#username');
+      await userField.waitFor({ state: 'visible', timeout: 15000 });
+    } catch {
+      try {
+        userField = page.locator('input[formcontrolname="userId"]');
+        await userField.waitFor({ state: 'visible', timeout: 5000 });
+      } catch {
+        userField = page.locator('input[type="text"]').first();
+        await userField.waitFor({ state: 'visible', timeout: 5000 });
+      }
+    }
+
+    await userField.fill(userId);
+    await page.locator('input[type="password"]').first().fill(password);
+    await page.locator('#login_button').click();
     await page.waitForTimeout(5000);
 
     const currentUrl = page.url();

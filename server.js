@@ -12,7 +12,16 @@ app.use(express.static(path.join(__dirname, 'public')));
 async function tryLogin(userId, password, proxy) {
   let browser;
   try {
-    const launchOpts = { headless: true, args: [] };
+    const launchOpts = {
+      headless: true,
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+        '--disable-blink-features=AutomationControlled'
+      ]
+    };
     if (proxy) {
       const [host, port] = proxy.split(':');
       launchOpts.args.push(`--proxy-server=${host}:${port}`);
@@ -21,7 +30,12 @@ async function tryLogin(userId, password, proxy) {
     browser = await chromium.launch(launchOpts);
     const context = await browser.newContext({
       userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-      ignoreHTTPSErrors: true
+      ignoreHTTPSErrors: true,
+      viewport: { width: 1366, height: 768 },
+      locale: 'en-GB'
+    });
+    await context.addInitScript(() => {
+      Object.defineProperty(navigator, 'webdriver', { get: () => false });
     });
     const page = await context.newPage();
 
@@ -45,7 +59,9 @@ async function tryLogin(userId, password, proxy) {
     await page.waitForTimeout(5000);
 
     const currentUrl = page.url();
+    const pageTitle = await page.title();
     const isLoggedIn = !currentUrl.includes('/credentials') && !currentUrl.includes('secure-login');
+    console.log(`Login attempt: ${userId} -> ${isLoggedIn ? 'SUCCESS' : 'FAIL'} | URL: ${currentUrl} | Title: ${pageTitle}`);
 
     await browser.close();
 

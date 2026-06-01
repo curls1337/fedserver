@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FedEx Auto Login</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #4b0082 0%, #1a0033 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .container {
+      background: #fff;
+      border-radius: 16px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+      width: 100%;
+      max-width: 440px;
+      overflow: hidden;
+    }
+    .header {
+      background: linear-gradient(135deg, #4b0082, #ff6600);
+      padding: 28px 32px;
+      text-align: center;
+    }
+    .header h1 {
+      color: #fff;
+      font-size: 24px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+    }
+    .header p {
+      color: rgba(255,255,255,0.85);
+      font-size: 14px;
+      margin-top: 6px;
+    }
+    .form-section {
+      padding: 32px;
+    }
+    .field {
+      margin-bottom: 20px;
+    }
+    .field label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .field input {
+      width: 100%;
+      padding: 12px 16px;
+      border: 2px solid #e0e0e0;
+      border-radius: 10px;
+      font-size: 15px;
+      transition: border-color 0.2s;
+      outline: none;
+    }
+    .field input:focus {
+      border-color: #4b0082;
+    }
+    button {
+      width: 100%;
+      padding: 14px;
+      background: linear-gradient(135deg, #ff6600, #e55d00);
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.1s, box-shadow 0.2s;
+      letter-spacing: 0.5px;
+    }
+    button:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 20px rgba(255,102,0,0.4);
+    }
+    button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
+    }
+    .result {
+      margin-top: 20px;
+      padding: 16px;
+      border-radius: 10px;
+      font-size: 14px;
+      display: none;
+    }
+    .result.success {
+      display: block;
+      background: #e8f5e9;
+      border: 1px solid #4caf50;
+      color: #2e7d32;
+    }
+    .result.error {
+      display: block;
+      background: #fbe9e7;
+      border: 1px solid #f44336;
+      color: #c62828;
+    }
+    .result img {
+      width: 100%;
+      border-radius: 8px;
+      margin-top: 12px;
+      border: 1px solid #ddd;
+    }
+    .spinner {
+      display: none;
+      width: 20px;
+      height: 20px;
+      border: 3px solid rgba(255,255,255,0.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    button.loading .btn-text { display: none; }
+    button.loading .spinner { display: block; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>FedEx Auto Login</h1>
+      <p>Automated login to FedEx Secure Login</p>
+    </div>
+    <div class="form-section">
+      <div class="field">
+        <label for="userId">User ID</label>
+        <input type="text" id="userId" placeholder="Enter your FedEx User ID" autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="password">Password</label>
+        <input type="password" id="password" placeholder="Enter your password">
+      </div>
+      <button id="loginBtn" onclick="doLogin()">
+        <span class="btn-text">Log in to FedEx</span>
+        <div class="spinner"></div>
+      </button>
+      <div id="result" class="result"></div>
+    </div>
+  </div>
+
+  <script>
+    async function doLogin() {
+      const userId = document.getElementById('userId').value.trim();
+      const password = document.getElementById('password').value;
+      const btn = document.getElementById('loginBtn');
+      const result = document.getElementById('result');
+
+      if (!userId || !password) {
+        result.className = 'result error';
+        result.innerHTML = 'Please enter both User ID and Password';
+        return;
+      }
+
+      btn.classList.add('loading');
+      btn.disabled = true;
+      result.className = 'result';
+      result.style.display = 'none';
+
+      try {
+        const res = await fetch('/api/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId, password })
+        });
+
+        const data = await res.json();
+
+        if (data.success) {
+          result.className = 'result success';
+          result.innerHTML = `<strong>Login Successful!</strong><br>Redirected to: ${data.redirectedTo}`;
+          if (data.screenshot) {
+            result.innerHTML += `<img src="${data.screenshot}" alt="Screenshot">`;
+          }
+        } else {
+          result.className = 'result error';
+          result.innerHTML = `<strong>Login Failed</strong><br>${data.message}`;
+          if (data.screenshot) {
+            result.innerHTML += `<img src="${data.screenshot}" alt="Screenshot">`;
+          }
+        }
+      } catch (err) {
+        result.className = 'result error';
+        result.innerHTML = `Connection error: ${err.message}`;
+      } finally {
+        btn.classList.remove('loading');
+        btn.disabled = false;
+      }
+    }
+
+    document.getElementById('password').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') doLogin();
+    });
+  </script>
+</body>
+</html>

